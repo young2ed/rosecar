@@ -1,0 +1,121 @@
+<!-- -*- mode: XML -*- -->
+<launch>
+	<!-- optionally launch in GDB, for debugging -->
+	<arg name="debug" default="false" />
+	<arg if="$(arg debug)" name="launch_prefix" value="xterm -e gdb --args" />
+	<arg unless="$(arg debug)" name="launch_prefix" value="" />
+	
+	<!-- base  -->
+	<include file="/home/nvidia/RoseCar/launch/rosecar.launch" />
+
+	<!-- trajectory -->
+	<node pkg="hector_trajectory_server" type="hector_trajectory_server" name="hector_trajectory_server" output="screen">
+    	<param name="target_frame_name" type="string" value="odom" />
+    	<param name="source_frame_name" type="string" value="base_link" />
+    	<param name="trajectory_update_rate" type="double" value="4.0" />
+    	<param name="trajectory_publish_rate" type="double" value="1.0" />
+	</node>
+
+    <arg name="svo_file"              default="" /><!-- <arg name="svo_file" default="path/to/svo/file.svo"> -->
+    <arg name="zed_id"                default="0" />
+    <!-- GPU ID-->
+    <arg name="gpu_id"                default="-1" />
+    <!-- Definition coordinate frames -->
+    <arg name="publish_tf"            default="false" />
+    <arg name="odometry_frame"        default="zed_odom" />
+    <arg name="base_frame"            default="zed_camera_right_link" />
+    <arg name="camera_frame"          default="camera_link" />
+    <arg name="depth_frame"           default="camera_link" />-->
+
+    <node name="zed_wrapper_node" pkg="zed_wrapper" type="zed_wrapper_node" output="screen" ns="zed">
+
+        <!-- publish odometry frame -->
+        <param name="publish_tf"            value="$(arg publish_tf)" />
+        <!-- Configuration frame camera -->
+        <param name="odometry_frame"        value="$(arg odometry_frame)" />
+        <param name="base_frame"            value="$(arg base_frame)" />
+        <param name="camera_frame"          value="$(arg camera_frame)" />
+        <param name="depth_frame"           value="$(arg depth_frame)" />
+    
+        <!-- SVO file path -->
+        <param name="svo_filepath"          value="$(arg svo_file)" />
+
+        <!-- ZED parameters -->
+        <param name="zed_id"                value="$(arg zed_id)" />
+
+        <param name="resolution"            value="3" />
+        <param name="quality"               value="1" />
+        <param name="sensing_mode"          value="0" />
+        <param name="frame_rate"            value="60" />
+        <param name="odometry_db"           value="" />
+        <param name="openni_depth_mode"     value="0" />
+        <param name="gpu_id"                value="$(arg gpu_id)" />
+        <param name="confidence"            value="100" />
+        <param name="depth_stabilization"   value="1" />
+
+        <!-- ROS topic names -->
+        <param name="rgb_topic"             value="rgb/image_rect_color" />
+        <param name="rgb_raw_topic"         value="rgb/image_raw_color" />
+        <param name="rgb_cam_info_topic"    value="rgb/camera_info" />
+
+        <param name="left_topic"            value="left/image_rect_color" />
+        <param name="left_raw_topic"        value="left/image_raw_color" />
+        <param name="left_cam_info_topic"   value="left/camera_info" />
+    
+        <param name="right_topic"           value="right/image_rect_color" />
+        <param name="right_raw_topic"       value="right/image_raw_color" />
+        <param name="right_cam_info_topic"  value="right/camera_info" />
+
+        <param name="depth_topic"           value="depth/depth_registered" />
+        <param name="depth_cam_info_topic"  value="depth/camera_info" />
+
+        <param name="point_cloud_topic"     value="/zed_pc2" />
+        <param name="odometry_topic"        value="odom" />
+
+    </node>
+
+    <!-- pointcloud_to_laserscan_node -->
+    <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="zed_pointcloud_to_laserscan"
+		output="screen" launch-prefix="$(arg launch_prefix)" >
+        <remap from="cloud_in" to="/zed_pc2"/>
+		<remap from="scan" to="/zed_scan" /> 
+        <rosparam>
+           target_frame: laser # Leave disabled to output scan in pointcloud frame
+           range_min: 0.0
+           range_max: 40.0
+           use_inf: true
+           # Concurrency level, affects number of pointclouds queued for processing and number of threads used
+           # 0 : Detect number of cores
+           # 1 : Single threaded
+           # 2->inf : Parallelism level
+           concurrency_level: 1
+        </rosparam>
+    </node>
+	
+	<!-- slam_gmapping -->
+	<node pkg="gmapping" type="slam_gmapping" name="gmapping_scan"
+		output="screen" launch-prefix="$(arg launch_prefix)" >
+		<remap from="/scan" to="/zed_scan" /> 
+		<param name="map_frame" value="map" />
+		<param name="odom_frame" value="odom" />
+		<param name="base_frame" value="base_link" />
+		<param name="minimumScore" value="50" />
+		<param name="maxRange" value="25" />
+		<param name="maxUrange" value="25" />
+		<param name="linearUpdate" value="0.2" />
+		<param name="angularUpdate" value="0.2" />
+		<param name="temporalUpdate" value="5" />
+		<param name="particles" value="50"/>
+		<param name="map_update_interval" value="1" />
+		<param name="xmin" value="-200" />
+		<param name="ymin" value="-200" />
+		<param name="xmax" value="200" />
+		<param name="ymax" value="200" />
+		<param name="delta" value="0.05" />
+	</node>
+	
+	<!-- rviz -->
+	<node pkg="rviz" type="rviz" name="my_rviz" 
+	args="-d /home/nvidia/RoseCar/rviz/zed.rviz" />
+	
+</launch>
